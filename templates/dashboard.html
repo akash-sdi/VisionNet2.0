@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionNet Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem 2rem;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            opacity: 0.8;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.7rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn.start {
+            background: #28a745;
+            border-color: #28a745;
+        }
+
+        .btn.stop {
+            background: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        .status-active {
+            background: #28a745;
+            box-shadow: 0 0 10px #28a745;
+        }
+
+        .status-inactive {
+            background: #dc3545;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .main-content {
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            min-height: calc(100vh - 160px);
+        }
+
+        .camera-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .camera-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            flex: 1;
+        }
+
+        .camera-feed {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .camera-feed:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .camera-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .camera-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .camera-stats {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .camera-frame {
+            width: 100%;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .camera-frame img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .no-feed {
+            color: rgba(255, 255, 255, 0.6);
+            font-style: italic;
+        }
+
+        .sidebar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            overflow-y: auto;
+        }
+
+        .stats-section {
+            margin-bottom: 2rem;
+        }
+
+        .stats-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.8rem;
+            padding: 0.7rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            opacity: 0.9;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #4CAF50;
+        }
+
+        .chart-container {
+            margin-top: 1rem;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .events-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            border-left: 3px solid #4CAF50;
+            transition: all 0.3s ease;
+        }
+
+        .event-item:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .event-time {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+
+        .event-description {
+            margin-top: 0.3rem;
+            font-size: 0.9rem;
+        }
+
+        .loading {
+            text-align: center;
+            opacity: 0.7;
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        .error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .success {
+            color: #51cf66;
+            background: rgba(81, 207, 102, 0.1);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border: 1px solid rgba(81, 207, 102, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn {
+                text-align: center;
+            }
+
+            .camera-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .footer {
+            text-align: center;
+            padding: 1rem;
+            opacity: 0.6;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 VisionNet Dashboard</h1>
+        <p class="subtitle">Multi-Camera Deep Learning Target Tracking System</p>
+        <div class="controls">
+            <div style="display: flex; align-items: center;">
+                <span class="status-indicator" id="systemStatus"></span>
+                <span id="systemStatusText">System Offline</span>
+            </div>
+            <button class="btn start" onclick="startSystem()">Start System</button>
+            <button class="btn stop" onclick="stopSystem()">Stop System</button>
+            <button class="btn" onclick="exportData()">Export Data</button>
+            <button class="btn" onclick="refreshData()">Refresh</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="camera-section">
+            <h2 style="margin-bottom: 1rem;">📹 Camera Feeds</h2>
+            <div id="cameraGrid" class="camera-grid">
+                <div class="loading">No camera feeds available. Start the system to begin tracking.</div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="stats-section">
+                <h3 class="stats-title">📊 System Statistics</h3>
+                <div id="systemStats">
+                    <div class="stat-item">
+                        <span class="stat-label">Active Cameras:</span>
+                        <span class="stat-value" id="activeCameras">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Tracks:</span>
+                        <span class="stat-value" id="totalTracks">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Global Tracks:</span>
+                        <span class="stat-value" id="globalTracks">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">System FPS:</span>
+                        <span class="stat-value" id="systemFPS">0.0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Uptime:</span>
+                        <span class="stat-value" id="uptime">0s</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-section">
+                <h3 class="stats-title">📈 Performance Chart</h3>
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+
+            <div class="stats-section">
+                <h3 class="stats-title">📝 Recent Events</h3>
+                <div id="eventsList" class="events-list">
+                    <div class="loading">No events to display</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>VisionNet v1.0.0 | Godavari Institute of Engineering & Technology</p>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+
+        // Chart setup
+        let performanceChart;
+        const chartData = {
+            labels: [],
+            datasets: [{
+                label: 'System FPS',
+                data: [],
+                borderColor: '#4CAF50',
+                backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        };
+
+        // Initialize chart
+        function initChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ffffff' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#ffffff' },
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Socket.IO event handlers
+        socket.on('connect', function() {
+            console.log('Connected to VisionNet dashboard');
+            updateStatus(true, 'Connected');
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Disconnected from dashboard');
+            updateStatus(false, 'Disconnected');
+        });
+
+        socket.on('system_update', function(data) {
+            updateDashboard(data);
+        });
+
+        socket.on('error', function(data) {
+            console.error('Dashboard error:', data.message);
+            showMessage(data.message, 'error');
+        });
+
+        // Update functions
+        function updateStatus(isActive, statusText) {
+            const indicator = document.getElementById('systemStatus');
+            const text = document.getElementById('systemStatusText');
+
+            if (isActive) {
+                indicator.className = 'status-indicator status-active';
+                text.textContent = statusText || 'System Active';
+            } else {
+                indicator.className = 'status-indicator status-inactive';
+                text.textContent = statusText || 'System Offline';
+            }
+        }
+
+        function updateDashboard(data) {
+            // Update system statistics
+            updateSystemStats(data.system_stats);
+
+            // Update camera feeds
+            updateCameraFeeds(data.cameras);
+
+            // Update performance chart
+            updatePerformanceChart(data.system_stats);
+
+            // Update status
+            updateStatus(data.system_stats.active_cameras > 0, 'System Active');
+        }
+
+        function updateSystemStats(stats) {
+            document.getElementById('activeCameras').textContent = stats.active_cameras || 0;
+            document.getElementById('totalTracks').textContent = stats.total_tracks || 0;
+            document.getElementById('globalTracks').textContent = Object.keys(stats.global_tracks || {}).length;
+            document.getElementById('systemFPS').textContent = (stats.system_fps || 0).toFixed(1);
+            document.getElementById('uptime').textContent = formatUptime(stats.uptime || 0);
+        }
+
+        function updateCameraFeeds(cameras) {
+            const grid = document.getElementById('cameraGrid');
+
+            if (!cameras || Object.keys(cameras).length === 0) {
+                grid.innerHTML = '<div class="loading">No camera feeds available</div>';
+                return;
+            }
+
+            grid.innerHTML = '';
+
+            Object.entries(cameras).forEach(([cameraId, cameraData]) => {
+                const cameraDiv = document.createElement('div');
+                cameraDiv.className = 'camera-feed';
+
+                const tracksCount = cameraData.tracks || 0;
+                const fps = cameraData.stats ? (cameraData.stats.fps || 0).toFixed(1) : '0.0';
+
+                cameraDiv.innerHTML = `
+                    <div class="camera-header">
+                        <div class="camera-title">Camera ${cameraId}</div>
+                        <div class="camera-stats">${tracksCount} tracks | ${fps} FPS</div>
+                    </div>
+                    <div class="camera-frame">
+                        ${cameraData.frame ? 
+                            `<img src="${cameraData.frame}" alt="Camera ${cameraId} feed">` :
+                            '<div class="no-feed">No feed available</div>'
+                        }
+                    </div>
+                `;
+
+                grid.appendChild(cameraDiv);
+            });
+        }
+
+        function updatePerformanceChart(stats) {
+            if (!performanceChart) return;
+
+            const now = new Date();
+            const timeLabel = now.toLocaleTimeString();
+
+            chartData.labels.push(timeLabel);
+            chartData.datasets[0].data.push(stats.system_fps || 0);
+
+            // Keep only last 20 data points
+            if (chartData.labels.length > 20) {
+                chartData.labels.shift();
+                chartData.datasets[0].data.shift();
+            }
+
+            performanceChart.update();
+        }
+
+        function updateEvents() {
+            fetch('/api/events?hours=1')
+                .then(response => response.json())
+                .then(events => {
+                    const eventsList = document.getElementById('eventsList');
+
+                    if (!events || events.length === 0) {
+                        eventsList.innerHTML = '<div class="loading">No recent events</div>';
+                        return;
+                    }
+
+                    eventsList.innerHTML = '';
+
+                    events.slice(0, 10).forEach(event => {
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'event-item';
+
+                        const eventTime = new Date(event.timestamp).toLocaleTimeString();
+
+                        eventDiv.innerHTML = `
+                            <div class="event-time">${eventTime}</div>
+                            <div class="event-description">${event.description}</div>
+                        `;
+
+                        eventsList.appendChild(eventDiv);
+                    });
+                })
+                .catch(error => {
+                    console.error('Failed to update events:', error);
+                });
+        }
+
+        // Control functions
+        function startSystem() {
+            const cameraSources = [0]; // Default webcam
+
+            fetch('/api/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    camera_sources: cameraSources
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showMessage(data.error, 'error');
+                } else {
+                    updateStatus(true, 'System Starting...');
+                    showMessage(data.message, 'success');
+                    console.log('System started:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to start system:', error);
+                showMessage('Failed to start system', 'error');
+            });
+        }
+
+        function stopSystem() {
+            fetch('/api/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showMessage(data.error, 'error');
+                } else {
+                    updateStatus(false, 'System Stopped');
+                    showMessage(data.message, 'success');
+                    console.log('System stopped:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to stop system:', error);
+                showMessage('Failed to stop system', 'error');
+            });
+        }
+
+        function exportData() {
+            const hours = 24; // Export last 24 hours
+            window.open(`/api/export/csv?hours=${hours}`, '_blank');
+        }
+
+        function refreshData() {
+            socket.emit('request_update');
+            updateEvents();
+        }
+
+        function formatUptime(seconds) {
+            if (seconds < 60) {
+                return Math.floor(seconds) + 's';
+            } else if (seconds < 3600) {
+                return Math.floor(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's';
+            } else {
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                return hours + 'h ' + minutes + 'm';
+            }
+        }
+
+        function showMessage(message, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type; // 'error' or 'success'
+            messageDiv.textContent = message;
+
+            document.body.insertBefore(messageDiv, document.body.firstChild);
+
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            updateEvents();
+
+            // Request initial update
+            setTimeout(() => {
+                socket.emit('request_update');
+            }, 1000);
+
+            // Auto-refresh events every 30 seconds
+            setInterval(updateEvents, 30000);
+
+            console.log('VisionNet Dashboard initialized');
+        });
+    </script>
+</body>
+</html>
